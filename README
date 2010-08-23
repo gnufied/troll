@@ -1,0 +1,54 @@
+Troll
+=====
+
+Troll is yet another ActiveResource mocking library. I created troll with following goals:
+
+1. Don't need to mock calls at Net::HTTP level (which webmock,fakeweb do).
+2. Matches based on body should be supported.
+3. How many times a particular mock can be matched should be supported.
+4. If no match is found or if number of times the mock should be used has exceeded the predefined count,
+   actual webservice call should be made.
+5. If actual webservice call is made, data being exchanged should be printed.
+
+
+Example
+=======
+    class ActiveSupport::TestCase
+      include Troll::TestUnitStuff
+    end
+
+    require File.dirname(__FILE__) + '/../test_helper'
+
+    class ArticleTest < ActiveSupport::TestCase
+      context "Save valid article" do
+        setup do
+          http_mock(:post, "/articles.xml",{:times => 1,:body => /hemant/},{:body => fixture_file('article_1.xml'), :status => 201})
+          http_mock(:post,"/articles.xml",{:times => 1, :body => /foo/},{:status => 422})
+    
+          @article = Article.new(:title => "hemant", :content => "Kumar")
+          @article.save
+          @invalid_article = Article.new(:title => "foo")
+          @invalid_article.save
+        end
+    
+        should "save the article" do
+          assert @article.id
+          assert 'hemant', @article.title
+          assert !@invalid_article.id
+        end
+      end
+    
+      context "should get single article" do
+        setup do
+          http_mock(:get,"/articles/1.xml",{:times => 1},{:status => 200, :body => fixture_file('article_1.xml')})
+          @article = Article.find(1)
+        end
+        should "not be nil" do
+          assert @article
+        end
+      end
+    
+    end
+    
+    
+
