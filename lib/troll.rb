@@ -121,7 +121,6 @@ module ActiveResource
     alias_method :old_request, :request
 
     def request(method, path, * arguments)
-#      puts "#{method.to_s.upcase} #{site.scheme}://#{site.host}:#{site.port}#{path}"
       request_body = arguments.first
       new_path,query_string = path.split("?",2)
 
@@ -132,10 +131,8 @@ module ActiveResource
       
       unless response
         response = old_request(method, path, * arguments)
-#        print_responses(method, path, arguments, response)
         response
       else
-#        puts "Found a match with #{response.inspect}"
         handle_response(response)
       end
     end
