@@ -121,18 +121,25 @@ module ActiveResource
     alias_method :old_request, :request
 
     def request(method, path, * arguments)
+#      puts "#{method.to_s.upcase} #{site.scheme}://#{site.host}:#{site.port}#{path}"
       request_body = arguments.first
       new_path,query_string = path.split("?",2)
+      response = nil
 
       if request_body.blank? && !query_string.blank? && method.to_s.upcase == 'POST'
         request_body = query_string
+        response = check_for_matching_mock(method, new_path, request_body)
+      else
+        response = check_for_matching_mock(method, path, request_body)
       end
-      response = check_for_matching_mock(method, new_path, request_body)
+
       
       unless response
         response = old_request(method, path, * arguments)
+        #print_responses(method, path, arguments, response)
         response
       else
+#        puts "Found a match for #{path} with #{response.body}"
         handle_response(response)
       end
     end
