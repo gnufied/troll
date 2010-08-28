@@ -9,6 +9,8 @@ Troll is yet another ActiveResource mocking library. I created troll with follow
 4. If no match is found or if number of times the mock should be used has exceeded the predefined count,
    actual webservice call should be made.
 5. If actual webservice call is made, data being exchanged should be printed.
+6. Even in development mode, it should be possible to print data being exchanged.
+
 
 
 Example

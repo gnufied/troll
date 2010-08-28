@@ -1,9 +1,13 @@
 # Troll
+
 module Troll
+  autoload :MockActiveResourceConnection, "troll/mock_active_resource_connection"
+
   module TestUnitStuff
     def self.included(base)
       base.extend(CommonMethods)
       base.send(:include,CommonMethods)
+      ActiveResource::Connection.send(:include, MockActiveResourceConnection)
     end
 
     module CommonMethods
@@ -13,9 +17,56 @@ module Troll
         ActiveResource::Connection.resource_mock.http_mock[key] << Troll::Responder.new(body_header, response_header)
       end
 
+      def clear_all_http_mocks()
+        ActiveResource::Connection.resource_mock.clear()
+      end
+
       def fixture_file(file_name)
         IO.read("#{Rails.root}/test/fixtures/#{file_name}")
       end
+    end
+  end
+
+  class ResourceMock
+    @http_mocks = {}
+
+    def http_mock
+      self.class.instance_variable_get(:@http_mocks)
+    end
+
+    def clear; self.class.instance_variable_set(:@http_mocks,{}); end
+
+    def fetch_match(request_method, request_path, request_body)
+      key = "#{request_method.to_s.upcase}#{request_path.to_s.upcase}"
+      mocked_responders = http_mock[key]
+      return nil unless mocked_responders
+      
+      matched_responder = nil
+      mocked_responders.reverse.each do |responder|
+        if match_body(responder.body_header[:body], request_body) && responder.can_be_used?
+          matched_responder = responder
+          break
+        end
+      end
+      
+      decrement_responder_count(matched_responder,key)
+      matched_responder
+    end
+
+    def decrement_responder_count(matched_responder,key)
+      if (matched_responder && matched_responder.can_be_decremented?)
+        matched_responder.times -= 1
+      end
+      if matched_responder && matched_responder.can_be_removed?
+        old_responders = http_mock[key]
+        old_responders.delete(matched_responder)
+        http_mock[key] = old_responders
+      end
+    end
+
+    def match_body(expected_body, request_body)
+      return true unless expected_body
+      CGI::unescape(request_body) =~ expected_body
     end
   end
 
@@ -27,6 +78,10 @@ module Troll
       @body_header = body_header
       @response_header = response_header
     end
+
+    def can_be_used?; self.times != 0; end
+    def can_be_decremented?; self.times != 0 && self.times != -1; end
+    def can_be_removed?; self.times == 0; end
   end
 
   class Response
@@ -73,97 +128,8 @@ module Troll
     end
   end
 
-  class ResourceMock
-    @http_mocks = {}
 
-    def http_mock
-      self.class.instance_variable_get(:@http_mocks)
-    end
-
-    def fetch_match(request_method, request_path, request_body, & block)
-      key = "#{request_method.to_s.upcase}#{request_path.to_s.upcase}"
-      mock_responder = http_mock[key]
-      if mock_responder
-        matched_responder = nil
-        mock_responder.each do |responder|
-          if match_body(responder.body_header[:body], request_body) && responder.times != 0
-            matched_responder = responder
-          end
-        end
-        decrement_responder_count(matched_responder, & block)
-      else
-        block.call(nil)
-      end
-    end
-
-    def decrement_responder_count(matched_responder, & block)
-      block.call(matched_responder)
-    ensure
-      if (matched_responder && (matched_responder.times != -1 || matched_responder.times != 0))
-        matched_responder.times -= 1
-      end
-    end
-
-    def match_body(expected_body, request_body)
-      return true unless expected_body
-      CGI::unescape(request_body) =~ expected_body
-    end
-
-  end
 end
 
-module ActiveResource
-  class Connection
-    @@resource_mock = Troll::ResourceMock.new()
 
-    cattr_accessor :resource_mock
-    
-    alias_method :old_request, :request
-
-    def request(method, path, * arguments)
-#      puts "#{method.to_s.upcase} #{site.scheme}://#{site.host}:#{site.port}#{path}"
-      request_body = arguments.first
-      new_path,query_string = path.split("?",2)
-      response = nil
-
-      if request_body.blank? && !query_string.blank? && method.to_s.upcase == 'POST'
-        request_body = query_string
-        response = check_for_matching_mock(method, new_path, request_body)
-      else
-        response = check_for_matching_mock(method, path, request_body)
-      end
-
-      
-      unless response
-        response = old_request(method, path, * arguments)
-        #print_responses(method, path, arguments, response)
-        response
-      else
-#        puts "Found a match for #{path} with #{response.body}"
-        handle_response(response)
-      end
-    end
-
-    def check_for_matching_mock(method, path, body)
-      response = nil
-      resource_mock.fetch_match(method, path, body) do |responder|
-        if (responder)
-          status = responder.response_header[:status] || 200
-          response = Troll::Response.new(responder.response_header[:body],status)
-        end
-      end
-      return response
-    end
-
-    def print_responses(method, path, arguments, response)
-      if (response && (200...500).include?(response.code.to_i))
-        puts("********** method is #{method.inspect} and path is #{path.inspect} **********")
-        puts arguments
-        puts "==== Response body ====="
-        puts response.body
-      end
-      response
-    end
-  end
-end
 
