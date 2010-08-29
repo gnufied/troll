@@ -5,11 +5,11 @@ Troll is yet another ActiveResource mocking library. I created troll with follow
 
 1. Don't need to mock calls at Net::HTTP level (which webmock,fakeweb do).
 2. Matches based on body should be supported.
-3. How many times a particular mock can be matched should be supported.
+3. How many times a particular mock can be matched should be supported. If supplying '-1' as times will match the mock forevever, unless
+   another mock is inserted after this one.
 4. If no match is found or if number of times the mock should be used has exceeded the predefined count,
    actual webservice call should be made.
-5. If actual webservice call is made, data being exchanged should be printed.
-6. Even in development mode, it should be possible to print data being exchanged.
+5. The most recent mock should be applied first.
 
 
 
@@ -22,9 +22,15 @@ Example
     require File.dirname(__FILE__) + '/../test_helper'
 
     class ArticleTest < ActiveSupport::TestCase
+      def setup
+        # Use this mock forever
+        http_mock(:get,'/articles/new.xml', {:times => -1 }, {:body => fixture_file('new_article.xml'),:status => 201})
+      end
       context "Save valid article" do
         setup do
+          # Use this mock 1 time if body and url matches
           http_mock(:post, "/articles.xml",{:times => 1,:body => /hemant/},{:body => fixture_file('article_1.xml'), :status => 201})
+	  # Use this mock 1 time if body and url matches
           http_mock(:post,"/articles.xml",{:times => 1, :body => /foo/},{:status => 422})
     
           @article = Article.new(:title => "hemant", :content => "Kumar")
