@@ -5,12 +5,11 @@ module Troll
       base.class_eval do
         cattr_accessor :resource_mock
         self.resource_mock = Troll::ResourceMock.new()
-        alias_method :old_request,:request
-        remove_method :request
+        alias_method_chain :request, :http_mock
       end
     end
 
-    def request(method, path, * arguments)
+    def request_with_http_mock(method, path, * arguments)
       request_body = arguments.first
       new_path,query_string = path.split("?",2)
       response = nil
@@ -35,7 +34,7 @@ module Troll
     end
 
     def mocked_request_has_body?(method)
-      ['POST','PUT'].include(method.to_s.upcase)
+      ['POST','PUT'].include?(method.to_s.upcase)
     end
 
     def check_for_matching_mock(method, path, body)
